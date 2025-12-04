@@ -1,262 +1,392 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8" />
-<title>Sistema ERP - Peças de Celular</title>
-
-<!-- React e Babel via CDN -->
-<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-<style>
-:root {
-  --bg: #f3f4f6;
-  --white: #ffffff;
-  --muted: #6b7280;
-  --accent: #2563eb;
-}
-
-* { box-sizing: border-box; font-family: Arial, sans-serif; }
-
-body, html { margin: 0; background: var(--bg); height: 100%; }
-
-.app { display: flex; height: 100vh; }
-
-.sidebar {
-  width: 240px;
-  background: var(--white);
-  padding: 20px;
-  border-right: 1px solid #e5e7eb;
-}
-
-.sidebar h2 { margin-bottom: 12px; }
-
-.sidebar ul { padding: 0; list-style: none; }
-.sidebar li { padding: 10px 0; cursor: pointer; color: var(--muted); }
-.sidebar li.active { color: var(--accent); font-weight: 700; }
-
-.main { flex: 1; padding: 24px; overflow-y: auto; }
-
-.searchWrap {
-  display: flex; gap: 10px; align-items: center;
-}
-
-.searchWrap input {
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  width: 300px;
-}
-
-.tableSection {
-  background: var(--white);
-  padding: 16px;
-  border-radius: 10px;
-  margin-top: 20px;
-}
-
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 10px; border-bottom: 1px solid #f3f4f6; }
-th { background: #fafafa; color: var(--muted); }
-
-.product-form { display: flex; flex-direction: column; gap: 12px; max-width: 500px; }
-.product-form input {
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-}
-.product-form button {
-  padding: 10px;
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-</style>
-
+  <meta charset="utf-8" />
+  <title>Sistema - Vendas Online (Firebase)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    /* CSS simples e limpo */
+    :root{--bg:#f3f4f6;--white:#fff;--muted:#6b7280;--accent:#2563eb}
+    *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+    body{margin:0;background:var(--bg);color:#111}
+    .app{display:flex;min-height:100vh}
+    .sidebar{width:220px;background:var(--white);padding:18px;border-right:1px solid #e6e6e6}
+    .sidebar h2{margin:0 0 12px}
+    .sidebar ul{list-style:none;padding:0;margin:0}
+    .sidebar li{padding:8px 0;color:var(--muted);cursor:pointer}
+    .sidebar li.active{color:var(--accent);font-weight:700}
+    .main{flex:1;padding:20px}
+    header{display:flex;align-items:center;justify-content:space-between}
+    .card{background:var(--white);padding:14px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.03)}
+    .search{display:flex;gap:8px;align-items:center}
+    input,select,textarea{padding:8px;border:1px solid #ddd;border-radius:6px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:8px;border-bottom:1px solid #f3f3f3;text-align:left}
+    .btn{background:var(--accent);color:white;padding:8px 12px;border:none;border-radius:6px;cursor:pointer}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:8px;margin-top:8px}
+    .col{flex:1}
+    .small{width:120px}
+    .right{text-align:right}
+    .mb8{margin-bottom:8px}
+  </style>
 </head>
 <body>
+  <div id="root"></div>
 
-<div id="root"></div>
+  <!-- Firebase v9 modular (via CDN) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, getDocs, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-<script type="text/babel">
+    // ----------------- 1) COLE AQUI SUA firebaseConfig (substitua este objeto) -----------------
+    const firebaseConfig = {
+      /* EXEMPLO (substitua pelos seus valores):
+      apiKey: "AIza....",
+      authDomain: "seuprojeto.firebaseapp.com",
+      projectId: "seuprojeto",
+      storageBucket: "seuprojeto.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:123:web:abcdef"
+      */
+    };
+    // ------------------------------------------------------------------------------------------------
 
-// -------------------- FUNÇÕES DE NORMALIZAÇÃO --------------------
-function normalize(text) {
-  return text
-    .toLowerCase()
-    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-z0-9 ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+    if (!firebaseConfig || !firebaseConfig.projectId) {
+      document.body.innerHTML = "<div style='padding:30px;font-family:Arial'>⚠️ Você precisa colar sua <b>firebaseConfig</b> no arquivo (veja instruções).<br>Abra o arquivo e cole os valores do Firebase no bloco indicado.</div>";
+      throw new Error("Firebase config não fornecido.");
+    }
 
-function makeSearchIndex(p) {
-  return normalize(`${p.name} ${p.code} ${p.brand} ${p.category}`);
-}
+    // Inicializa Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-// -------------------- COMPONENTE FORMULÁRIO --------------------
-function ProductForm({ onSave }) {
+    // Assina anonimamente (modo de teste). Você pode mudar depois para e-mail/senha.
+    signInAnonymously(auth).catch(e => console.error("Auth error:", e));
 
-  const [product, setProduct] = React.useState({
-    code: "",
-    name: "",
-    brand: "",
-    category: "",
-    stock: 0,
-    cost: 0
-  });
+    // ---------------- Dados iniciais (exemplo) ----------------
+    const initialProducts = [
+      { id: "163-464", name: "Tela Samsung A50 Incell Original", brand: "Samsung", category: "Telas", price: 120.00, stock: 12 },
+      { id: "163-1208", name: "Display A50 Tela Premium", brand: "Samsung", category: "Telas", price: 150.00, stock: 8 },
+      { id: "163-1210", name: "A50 Tela Oled Completa", brand: "Samsung", category: "Telas", price: 180.00, stock: 5 },
+      { id: "165-3120", name: "Subplaca Samsung A50", brand: "Samsung", category: "Subplacas", price: 35.00, stock: 20 },
+    ];
 
-  function change(e) {
-    const { name, value } = e.target;
-    setProduct(p => ({
-      ...p,
-      [name]: (name === "stock" || name === "cost") ? Number(value) : value
-    }));
-  }
+    // ----------------- Funções utilitárias -----------------
+    function normalize(text = "") {
+      return String(text).toLowerCase()
+        .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+        .replace(/[^a-z0-9 ]/g, " ")
+        .replace(/\s+/g, " ").trim();
+    }
 
-  function save(e) {
-    e.preventDefault();
-    if (!product.name) return alert("Nome é obrigatório!");
-    onSave(product);
-    setProduct({ code: "", name: "", brand: "", category: "", stock: 0, cost: 0 });
-  }
+    // ----------------- Render básico (UI) -----------------
+    const root = document.getElementById("root");
+    root.innerHTML = `
+      <div class="app">
+        <aside class="sidebar card">
+          <h2>Menu</h2>
+          <ul>
+            <li id="m-produtos" class="active">Produtos</li>
+            <li id="m-vendas">Vendas</li>
+            <li id="m-rel">Relatórios</li>
+            <li id="m-config">Configurações</li>
+            <li id="m-sync">Sincronizar Produtos</li>
+          </ul>
+          <div class="mb8 muted" style="margin-top:12px;font-size:13px">Usuário: <span id="uid">—</span></div>
+          <div class="muted" style="font-size:13px">Firestore: <span id="projectId"></span></div>
+        </aside>
 
-  return (
-    <form onSubmit={save} className="product-form">
+        <main class="main">
+          <div id="content"></div>
+        </main>
+      </div>
+    `;
 
-      <input placeholder="Código" name="code" value={product.code} onChange={change} />
+    document.getElementById("projectId").textContent = firebaseConfig.projectId || "";
 
-      <input placeholder="Nome do produto *" name="name" value={product.name} onChange={change} required />
+    // Navegação
+    const menu = {
+      produtos: document.getElementById("m-produtos"),
+      vendas: document.getElementById("m-vendas"),
+      rel: document.getElementById("m-rel"),
+      config: document.getElementById("m-config"),
+      sync: document.getElementById("m-sync"),
+    };
+    function setActive(menuKey) {
+      for (const k in menu) menu[k].classList.remove("active");
+      if (menuKey === "produtos") menu.produtos.classList.add("active");
+      if (menuKey === "vendas") menu.vendas.classList.add("active");
+      if (menuKey === "rel") menu.rel.classList.add("active");
+      if (menuKey === "config") menu.config.classList.add("active");
+      if (menuKey === "sync") menu.sync.classList.add("active");
+    }
 
-      <input placeholder="Marca" name="brand" value={product.brand} onChange={change} />
+    // Atualiza UID quando autenticado
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        document.getElementById("uid").textContent = user.uid;
+      }
+    });
 
-      <input placeholder="Categoria" name="category" value={product.category} onChange={change} />
+    // ----------------- Produtos (local) -----------------
+    // Mantemos os produtos locais; há botão para sincronizar com Firestore.
+    let products = initialProducts.slice();
 
-      <input placeholder="Estoque" type="number" name="stock" value={product.stock} onChange={change} />
+    function renderProducts() {
+      setActive("produtos");
+      const html = [];
+      html.push('<div class="card"><h3>Produtos</h3>');
+      html.push('<div class="row mb8"><input id="f-filter" placeholder="Buscar produto (ex: tela a50)" style="flex:1"/><button id="btnNew" class="btn">Novo Produto</button></div>');
+      html.push('<table><thead><tr><th>Código</th><th>Nome</th><th>Marca</th><th>Categoria</th><th>Estoque</th></tr></thead><tbody>');
+      const filter = (document.getElementById("f-filter") && document.getElementById("f-filter").value) || "";
+      const terms = normalize(filter).split(" ").filter(Boolean);
+      const list = products.filter(p => terms.every(t => normalize([p.name, p.id, p.brand, p.category].join(" ")).includes(t)));
+      for (const p of list) {
+        html.push(`<tr><td>${p.id}</td><td>${p.name}</td><td>${p.brand}</td><td>${p.category}</td><td class="right">${p.stock}</td></tr>`);
+      }
+      if (list.length === 0) html.push('<tr><td colspan="5" class="muted">Nenhum produto</td></tr>');
+      html.push('</tbody></table></div>');
+      document.getElementById("content").innerHTML = html.join("");
+      // attach events
+      document.getElementById("btnNew").onclick = showNewProductForm;
+      const filterEl = document.getElementById("f-filter");
+      filterEl && (filterEl.oninput = renderProducts);
+    }
 
-      <input placeholder="Preço (R$)" type="number" step="0.01" name="cost" value={product.cost} onChange={change} />
+    function showNewProductForm() {
+      setActive("produtos");
+      document.getElementById("content").innerHTML = `
+        <div class="card">
+          <h3>Novo Produto</h3>
+          <div class="row"><input id="np-id" placeholder="Código (ex: 163-999)" class="col"/></div>
+          <div class="row"><input id="np-name" placeholder="Nome" class="col"/></div>
+          <div class="row"><input id="np-brand" placeholder="Marca" class="col"/><input id="np-cat" placeholder="Categoria" class="small"/></div>
+          <div class="row"><input id="np-stock" placeholder="Estoque" type="number" class="small"/><input id="np-price" placeholder="Preço" type="number" step="0.01" class="small"/></div>
+          <div style="margin-top:12px"><button id="saveProd" class="btn">Salvar</button> <button id="cancelProd">Cancelar</button></div>
+        </div>
+      `;
+      document.getElementById("cancelProd").onclick = renderProducts;
+      document.getElementById("saveProd").onclick = () => {
+        const id = document.getElementById("np-id").value.trim() || `p-${Date.now()}`;
+        const name = document.getElementById("np-name").value.trim();
+        const brand = document.getElementById("np-brand").value.trim();
+        const category = document.getElementById("np-cat").value.trim();
+        const stock = Number(document.getElementById("np-stock").value || 0);
+        const price = Number(document.getElementById("np-price").value || 0);
+        if (!name) return alert("Nome obrigatório");
+        products.push({ id, name, brand, category, stock, price });
+        renderProducts();
+      }
+    }
 
-      <button type="submit">Salvar Produto</button>
-    </form>
-  );
-}
+    // ----------------- Sincronizar produtos com Firestore -----------------
+    menu.sync.onclick = async () => {
+      setActive("sync");
+      document.getElementById("content").innerHTML = '<div class="card"><h3>Sincronizar Produtos</h3><p class="muted">Irá enviar os produtos locais para a coleção <b>products</b> no Firestore.</p><p><button id="doSync" class="btn">Sincronizar agora</button></p></div>';
+      document.getElementById("doSync").onclick = async () => {
+        if (!confirm("Enviar produtos locais para o Firestore?")) return;
+        const colRef = collection(db, "products");
+        let count = 0;
+        for (const p of products) {
+          try {
+            await addDoc(colRef, {
+              code: p.id, name: p.name, brand: p.brand, category: p.category,
+              stock: p.stock, price: p.price, createdAt: serverTimestamp()
+            });
+            count++;
+          } catch (e) {
+            console.error("Erro ao salvar produto:", e);
+          }
+        }
+        alert("Sincronizados: " + count);
+      }
+    };
 
-// -------------------- SISTEMA PRINCIPAL --------------------
-function App() {
+    // ----------------- Vendas (salvar no Firestore) -----------------
+    menu.vendas.onclick = () => renderSalesUI();
 
-  const [secao, setSecao] = React.useState("produtos");
-  const [query, setQuery] = React.useState("");
+    async function renderSalesUI() {
+      setActive("vendas");
+      // fetch latest products from Firestore if exists, otherwise use local
+      let productOptions = products.slice();
+      try {
+        const prodSnap = await getDocs(collection(db, "products"));
+        if (!prodSnap.empty) {
+          productOptions = prodSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+      } catch (e) {
+        console.warn("Não foi possível ler products do Firestore, usando produtos locais.", e);
+      }
 
-  const [products, setProducts] = React.useState([
-    { id: 1, code: "163-464", name: "Tela Samsung A50 Incell Original", category: "Telas", brand: "Samsung", stock: 12, cost: 120 },
-    { id: 2, code: "163-1208", name: "Display A50 Tela Premium", category: "Telas", brand: "Samsung", stock: 8, cost: 150 },
-    { id: 3, code: "163-1210", name: "A50 Tela Oled Completa", category: "Telas", brand: "Samsung", stock: 5, cost: 180 },
-  ]);
+      document.getElementById("content").innerHTML = `
+        <div class="card">
+          <h3>Registrar Venda</h3>
+          <div class="row mb8">
+            <select id="s-product" class="col"></select>
+            <input id="s-qty" type="number" min="1" value="1" class="small"/>
+            <input id="s-price" type="number" step="0.01" placeholder="Preço" class="small"/>
+          </div>
+          <div class="row mb8">
+            <input id="s-client" placeholder="Cliente (nome / CNPJ / telefone)" class="col"/>
+            <input id="s-seller" placeholder="Vendedor" class="small"/>
+            <select id="s-payment" class="small">
+              <option value="Dinheiro">Dinheiro</option>
+              <option value="Cartão">Cartão</option>
+              <option value="Pix">Pix</option>
+              <option value="Boleto">Boleto</option>
+            </select>
+          </div>
+          <div style="margin-top:8px"><button id="saveSale" class="btn">Finalizar Venda</button> <button id="cancelSale">Cancelar</button></div>
+        </div>
 
-  const indexed = React.useMemo(
-    () => products.map(p => ({ ...p, searchIndex: makeSearchIndex(p) })),
-    [products]
-  );
+        <div style="height:12px"></div>
 
-  const results = React.useMemo(() => {
-    const terms = normalize(query).split(" ").filter(Boolean);
-    if (terms.length === 0) return indexed;
+        <div class="card">
+          <h3>Vendas realizadas</h3>
+          <div class="row mb8">
+            <input id="f-client" placeholder="Filtrar por cliente" class="col"/>
+            <input id="f-seller" placeholder="Filtrar por vendedor" class="small"/>
+            <input id="f-date" type="date" class="small"/>
+            <button id="btnFilter" class="btn">Filtrar</button>
+            <button id="btnRefresh" class="btn" style="background:#10b981">Atualizar</button>
+          </div>
+          <div id="salesList" style="margin-top:8px"></div>
+        </div>
+      `;
 
-    return indexed.filter(p =>
-      terms.every(t => p.searchIndex.includes(t))
-    );
-  }, [query, indexed]);
+      // populate product select
+      const sel = document.getElementById("s-product");
+      sel.innerHTML = productOptions.map(p => `<option value="${p.code || p.id}">${(p.code||p.id)} — ${p.name}</option>`).join("");
+      const defaultPrice = (productOptions[0] && (productOptions[0].price || productOptions[0].price === 0 ? productOptions[0].price : productOptions[0].price)) || 0;
+      document.getElementById("s-price").value = defaultPrice;
 
-  function saveProduct(p) {
-    const id = Math.max(0, ...products.map(p => p.id)) + 1;
-    setProducts(prev => [...prev, { id, ...p }]);
-    setSecao("produtos");
-  }
+      document.getElementById("cancelSale").onclick = renderSalesUI;
 
-  return (
-    <div className="app">
+      // Save sale
+      document.getElementById("saveSale").onclick = async () => {
+        const prodCode = document.getElementById("s-product").value;
+        const qty = Number(document.getElementById("s-qty").value || 1);
+        const price = Number(document.getElementById("s-price").value || 0);
+        const client = document.getElementById("s-client").value.trim();
+        const seller = document.getElementById("s-seller").value.trim();
+        const payment = document.getElementById("s-payment").value;
 
-      <aside className="sidebar">
-        <h2>Menu</h2>
-        <ul>
-          <li className={secao === "produtos" ? "active" : ""} onClick={() => setSecao("produtos")}>Produtos</li>
-          <li className={secao === "cadastro" ? "active" : ""} onClick={() => setSecao("cadastro")}>Cadastro</li>
-        </ul>
-      </aside>
+        if (!prodCode || !client || !seller) return alert("Preencha produto, cliente e vendedor.");
 
-      <main className="main">
+        const sale = {
+          productCode: prodCode,
+          qty, price, total: qty * price,
+          client, seller, payment,
+          createdAt: serverTimestamp()
+        };
 
-        {secao === "produtos" && (
-          <>
-            <h1>Produtos</h1>
+        try {
+          await addDoc(collection(db, "sales"), sale);
+          alert("Venda registrada.");
+          renderSalesUI(); // refresh
+        } catch (e) {
+          console.error(e);
+          alert("Erro ao salvar venda: " + e.message);
+        }
+      };
 
-            <div className="searchWrap">
-              <input
-                placeholder="Buscar: ex 'tela a50'"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-              />
-            </div>
+      // filters and list
+      const btnFilter = document.getElementById("btnFilter");
+      const btnRefresh = document.getElementById("btnRefresh");
+      btnFilter.onclick = () => listSales();
+      btnRefresh.onclick = () => listSales();
+      listSales();
+    }
 
-            <div className="tableSection">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Nome</th>
-                    <th>Categoria</th>
-                    <th>Marca</th>
-                    <th>Estoque</th>
-                    <th>Preço</th>
-                  </tr>
-                </thead>
+    async function listSales() {
+      const clientFilter = document.getElementById("f-client") ? document.getElementById("f-client").value.trim() : "";
+      const sellerFilter = document.getElementById("f-seller") ? document.getElementById("f-seller").value.trim() : "";
+      const dateFilter = document.getElementById("f-date") ? document.getElementById("f-date").value : "";
 
-                <tbody>
-                  {results.map(p => (
-                    <tr key={p.id}>
-                      <td>{p.code}</td>
-                      <td>{p.name}</td>
-                      <td>{p.category}</td>
-                      <td>{p.brand}</td>
-                      <td>{p.stock}</td>
-                      <td>R$ {p.cost.toFixed(2)}</td>
-                    </tr>
-                  ))}
+      // Build query: get last 200 sales ordered by createdAt desc
+      const q = query(collection(db, "sales"), orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      const rows = [];
+      snap.forEach(doc => {
+        const data = doc.data();
+        rows.push({ id: doc.id, ...data });
+      });
 
-                  {results.length === 0 && (
-                    <tr>
-                      <td colSpan="6" style={{ textAlign: "center" }}>
-                        Nenhum produto encontrado.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
+      // client-side filtering
+      let filtered = rows;
+      if (clientFilter) filtered = filtered.filter(r => (r.client || "").toLowerCase().includes(clientFilter.toLowerCase()));
+      if (sellerFilter) filtered = filtered.filter(r => (r.seller || "").toLowerCase().includes(sellerFilter.toLowerCase()));
+      if (dateFilter) {
+        filtered = filtered.filter(r => {
+          if (!r.createdAt || !r.createdAt.toDate) return false;
+          const d = r.createdAt.toDate();
+          const iso = d.toISOString().slice(0,10);
+          return iso === dateFilter;
+        });
+      }
 
-              </table>
-            </div>
-          </>
-        )}
+      const html = ['<table><thead><tr><th>Data</th><th>Produto</th><th>Cliente</th><th>Vendedor</th><th>Qtd</th><th>Valor</th><th>Total</th><th>Pagamento</th></tr></thead><tbody>'];
+      if (filtered.length === 0) html.push('<tr><td colspan="8" class="muted">Nenhuma venda</td></tr>');
+      for (const s of filtered) {
+        const date = s.createdAt && s.createdAt.toDate ? s.createdAt.toDate().toLocaleString() : "";
+        html.push(`<tr><td>${date}</td><td>${s.productCode}</td><td>${s.client}</td><td>${s.seller}</td><td class="right">${s.qty}</td><td class="right">R$ ${Number(s.price||0).toFixed(2)}</td><td class="right">R$ ${Number(s.total||0).toFixed(2)}</td><td>${s.payment}</td></tr>`);
+      }
+      html.push('</tbody></table>');
+      document.getElementById("salesList").innerHTML = html.join("");
+    }
 
-        {secao === "cadastro" && (
-          <>
-            <h1>Cadastro de Produtos</h1>
-            <ProductForm onSave={saveProduct} />
-          </>
-        )}
+    // ----------------- Relatórios (simples) -----------------
+    menu.rel.onclick = async () => {
+      setActive("rel");
+      // compute basic report from sales collection
+      const snap = await getDocs(collection(db, "sales"));
+      let total = 0, count = 0;
+      const byProduct = {};
+      snap.forEach(d => {
+        const s = d.data();
+        count++;
+        total += (s.total || 0);
+        const key = s.productCode || "Outro";
+        byProduct[key] = (byProduct[key] || 0) + (s.total || 0);
+      });
+      const top = Object.entries(byProduct).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      let html = '<div class="card"><h3>Relatórios</h3>';
+      html += `<p>Total vendas: <b>R$ ${total.toFixed(2)}</b> — <span class="muted">${count} vendas</span></p>`;
+      html += '<h4>Top produtos</h4><ul>';
+      for (const [k,v] of top) html += `<li>${k} — R$ ${v.toFixed(2)}</li>`;
+      html += '</ul></div>';
+      document.getElementById("content").innerHTML = html;
+    };
 
-      </main>
+    // ----------------- Configurações -----------------
+    menu.config.onclick = () => {
+      setActive("config");
+      document.getElementById("content").innerHTML = `
+        <div class="card">
+          <h3>Configurações</h3>
+          <p class="muted">Configurações básicas do sistema.</p>
+          <p><button id="btnClearSales" class="btn" style="background:#f43f5e">Apagar todas as vendas (cuidado)</button></p>
+        </div>
+      `;
+      document.getElementById("btnClearSales").onclick = async () => {
+        if (!confirm("Apagar todas as vendas na coleção 'sales' no Firestore? Isso é irreversível.")) return;
+        // delete all docs in sales (not efficient, but OK for testes)
+        const snap = await getDocs(collection(db, "sales"));
+        let count = 0;
+        for (const d of snap.docs) {
+          await d.ref.delete();
+          count++;
+        }
+        alert("Apagadas: " + count);
+      };
+    };
 
-    </div>
-  );
-}
+    // Inicial
+    renderProducts();
 
-// Renderização
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-
-</script>
-
+  </script>
 </body>
 </html>
