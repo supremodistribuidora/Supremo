@@ -40,17 +40,15 @@
     import { getFirestore, collection, addDoc, query, orderBy, getDocs, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-    // ----------------- 1) COLE AQUI SUA firebaseConfig (substitua este objeto) -----------------
-    const firebaseConfig = {
-      /* EXEMPLO (substitua pelos seus valores):
-      apiKey: "AIza....",
-      authDomain: "seuprojeto.firebaseapp.com",
-      projectId: "seuprojeto",
-      storageBucket: "seuprojeto.appspot.com",
-      messagingSenderId: "1234567890",
-      appId: "1:123:web:abcdef"
-      */
-    };
+{
+  apiKey: "AIzaSyAWaqJxpgPR04P7uW1NmFzKlNsn2S-R6Rs",
+  authDomain: "supremo-6c6b4.firebaseapp.com",
+  projectId: "supremo-6c6b4",
+  storageBucket: "supremo-6c6b4.firebasestorage.app",
+  messagingSenderId: "22119534200",
+  appId: "1:22119534200:web:117ba67e38a55bf27ae78d",
+  measurementId: "G-67BKBT2HLP"
+};
     // ------------------------------------------------------------------------------------------------
 
     if (!firebaseConfig || !firebaseConfig.projectId) {
